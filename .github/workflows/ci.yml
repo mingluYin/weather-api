@@ -54,7 +54,7 @@ jobs:
         run: dotnet build tests/WeatherApi.Tests/WeatherApi.Tests.csproj --configuration $CONFIGURATION --no-restore
 
       - name: Test
-        run: dotnet test --project tests/WeatherApi.Tests/WeatherApi.Tests.csproj --configuration $CONFIGURATION --no-build --logger trx --results-directory TestResults
+        run: dotnet test --project tests/WeatherApi.Tests/WeatherApi.Tests.csproj --configuration $CONFIGURATION --no-build --results-directory TestResults
 
       - name: Validate weather response contract
         run: python scripts/validate_weather_response.py --file samples/weather-response.json
