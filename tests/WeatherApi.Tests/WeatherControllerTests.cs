@@ -10,7 +10,7 @@ namespace WeatherApi.Tests;
 public sealed class WeatherControllerTests
 {
     [Fact]
-    public async Task GetCurrentWeatherAsync_ReturnsSuccessEnvelope()
+    public async Task GetCurrentWeatherAsync_ReturnsSuccessResponse()
     {
         WeatherResponse weather = new(
             City: "Sydney",
@@ -33,7 +33,7 @@ public sealed class WeatherControllerTests
     }
 
     [Fact]
-    public async Task GetCurrentWeatherAsync_ReturnsBadRequestEnvelopeForMissingCity()
+    public async Task GetCurrentWeatherAsync_ReturnsBadRequestProblemDetailsForMissingCity()
     {
         WeatherController controller = new(
             new StubWeatherProvider(null),

@@ -1,6 +1,6 @@
 # Weather API technical test
 
-Small ASP.NET Core Web API written for a Senior DevOps technical test. It returns current weather for a city using the free Open-Meteo API and includes the delivery workflow pieces reviewers asked for: tests, linting, CI packaging, and Terraform IaC for AWS.
+Small ASP.NET Core Web API. It returns current weather for a city using the free Open-Meteo API and includes the delivery workflow pieces reviewers asked for: tests, linting, CI packaging, and Terraform IaC for AWS.
 
 ## Design choices
 
@@ -20,7 +20,7 @@ weather-api/
 |-- src/
 |   `-- WeatherApi/                         # ASP.NET Core Web API (.NET 10)
 |-- tests/
-|   `-- WeatherApi.Tests/                    # Unit tests
+|   `-- WeatherApi.Tests/                    # Unit and integration tests
 |-- infra/
 |   `-- terraform/                           # AWS Lambda/API Gateway IaC
 |-- scripts/
@@ -115,7 +115,8 @@ Key dependencies:
 - `Scalar.AspNetCore`: local API reference UI.
 - `Microsoft.AspNetCore.OpenApi`: OpenAPI generation.
 - `Amazon.Lambda.AspNetCoreServer.Hosting`: adapts ASP.NET Core to API Gateway HTTP API events in Lambda.
-- `xunit.v3`: unit tests.
+- `xunit.v3`: unit and integration tests.
+- `Microsoft.AspNetCore.Mvc.Testing`: in-memory ASP.NET Core integration tests.
 - Terraform AWS provider: Lambda, API Gateway, IAM, CloudWatch logs, alarms, variables, and outputs.
 
 ## Run locally
@@ -320,6 +321,14 @@ For the technical test, this is enough to prove the API behavior locally without
 ## Test and lint
 
 Stop any running `dotnet run` session before running tests. On Windows, the running API can lock the Debug executable and cause a file-copy error during test builds.
+
+The test suite covers:
+
+- Endpoint contract tests for `GET /weather?city=Sydney`.
+- Validation tests for missing or blank `city` returning `400 ProblemDetails`.
+- Provider failure tests for empty geocoding results, bad responses, network failures, and timeouts.
+- Mocked `HttpClient` tests for the Open-Meteo provider, so CI does not depend on the external API.
+- Integration tests using `WebApplicationFactory` to boot the app in memory and check routing, dependency injection, middleware, and JSON response shape together.
 
 ```powershell
 dotnet format .\src\WeatherApi\WeatherApi.csproj --verify-no-changes
@@ -543,7 +552,6 @@ Improvements with more time:
 
 - Add GitHub OIDC to assume an AWS deployment role and run real `terraform plan/apply`.
 - Add protected GitHub Environment approvals for production.
-- Add integration tests using `WebApplicationFactory`.
 - Add caching for geocoding results and repeated weather lookups.
 - Add structured logging enrichment and metrics with AWS Lambda Powertools for .NET.
 - Add Terraform remote state and separate state per environment.

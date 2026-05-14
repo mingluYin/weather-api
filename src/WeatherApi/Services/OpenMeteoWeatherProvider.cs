@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using WeatherApi.Exceptions;
 using WeatherApi.Models;
@@ -56,6 +57,10 @@ public sealed class OpenMeteoWeatherProvider : IWeatherProvider
             throw new WeatherProviderUnavailableException("Open-Meteo", new TimeoutException("Open-Meteo did not respond before the configured timeout."));
         }
         catch (HttpRequestException exception)
+        {
+            throw new WeatherProviderUnavailableException("Open-Meteo", exception);
+        }
+        catch (JsonException exception)
         {
             throw new WeatherProviderUnavailableException("Open-Meteo", exception);
         }

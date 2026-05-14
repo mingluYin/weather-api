@@ -73,3 +73,7 @@ app.MapGet("/", () => Results.Redirect(!app.Environment.IsProduction() ? "/scala
 app.MapControllers();
 
 app.Run();
+
+public partial class Program
+{
+}
