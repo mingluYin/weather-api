@@ -1,0 +1,7 @@
+{
+  "city": "Sydney, Australia",
+  "tempC": 22,
+  "condition": "Clear sky",
+  "source": "open-meteo",
+  "observedAt": "2026-05-12T10:30:00+00:00"
+}

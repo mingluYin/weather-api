@@ -1,0 +1,100 @@
+name: 1 - build, lint, test, package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ASPNETCORE_ENVIRONMENT: Test
+  CONFIGURATION: Release
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "true"
+  DOTNET_VERSION: 10.0.x
+
+jobs:
+  build-test-package:
+    name: build, lint, test, package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore tests/WeatherApi.Tests/WeatherApi.Tests.csproj
+
+      - name: Lint API formatting
+        run: dotnet format src/WeatherApi/WeatherApi.csproj --verify-no-changes --verbosity normal
+
+      - name: Lint test formatting
+        run: dotnet format tests/WeatherApi.Tests/WeatherApi.Tests.csproj --verify-no-changes --verbosity normal
+
+      - name: Build
+        run: dotnet build tests/WeatherApi.Tests/WeatherApi.Tests.csproj --configuration $CONFIGURATION --no-restore
+
+      - name: Test
+        run: dotnet test --project tests/WeatherApi.Tests/WeatherApi.Tests.csproj --configuration $CONFIGURATION --no-build --logger trx --results-directory TestResults
+
+      - name: Validate weather response contract
+        run: python scripts/validate_weather_response.py --file samples/weather-response.json
+
+      - name: Publish Lambda package contents
+        run: dotnet publish src/WeatherApi/WeatherApi.csproj --configuration $CONFIGURATION --runtime linux-x64 --self-contained false --output publish
+
+      - name: Zip package
+        run: |
+          cd publish
+          zip -r ../weather-api.zip .
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-api-lambda-package
+          path: weather-api.zip
+          if-no-files-found: error
+
+  iac-validate:
+    name: terraform validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        working-directory: infra/terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        working-directory: infra/terraform
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: infra/terraform
+        run: terraform validate

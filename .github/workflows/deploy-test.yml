@@ -1,0 +1,75 @@
+name: 2 - deploy-test
+
+on:
+  workflow_run:
+    workflows:
+      - 1 - build, lint, test, package
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: GitHub Actions run ID containing the Lambda package artifact.
+        required: true
+
+env:
+  TF_VAR_environment: test
+  TF_VAR_weather_provider: OpenMeteo
+
+jobs:
+  deploy-test:
+    name: test deployment readiness
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    environment: test
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve source run id
+        id: source
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Lambda package artifact from CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ steps.source.outputs.run_id }}" --name weather-api-lambda-package --dir .
+
+      - name: Confirm deploy artifact
+        run: test -f weather-api.zip
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init for test
+        working-directory: infra/terraform
+        run: terraform init -backend=false
+
+      - name: Terraform validate test inputs
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Test deployment placeholder
+        run: |
+          echo "CI passed and the Lambda package artifact has been downloaded."
+          echo "Test deployment is intentionally disabled because this technical test requires no AWS credentials."
+          echo "With AWS configured, this job would run terraform plan/apply for the test environment."
+
+      - name: Re-upload test-validated artifact for prod deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-api-lambda-package-test-validated
+          path: weather-api.zip
+          if-no-files-found: error

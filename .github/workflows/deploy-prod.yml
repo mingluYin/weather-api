@@ -1,0 +1,68 @@
+name: 3 - deploy-prod
+
+on:
+  workflow_run:
+    workflows:
+      - 2 - deploy-test
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: GitHub Actions run ID from deploy-test containing the test-validated artifact.
+        required: true
+
+env:
+  TF_VAR_environment: prod
+  TF_VAR_weather_provider: OpenMeteo
+
+jobs:
+  deploy-prod:
+    name: prod deployment readiness
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    environment: prod
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve source run id
+        id: source
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download test-validated Lambda package artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ steps.source.outputs.run_id }}" --name weather-api-lambda-package-test-validated --dir .
+
+      - name: Confirm prod artifact
+        run: test -f weather-api.zip
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init for prod
+        working-directory: infra/terraform
+        run: terraform init -backend=false
+
+      - name: Terraform validate prod inputs
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Prod deployment placeholder
+        run: |
+          echo "Test readiness completed and the same Lambda artifact is available for prod."
+          echo "Prod deployment is intentionally disabled because this technical test requires no AWS credentials."
+          echo "With AWS configured, this job would be protected by the prod GitHub Environment and run terraform plan/apply."
