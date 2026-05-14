@@ -6,6 +6,8 @@ TestResults/
 coverage/
 artifacts/
 publish/
+artifact-download/
+package-run/
 *.user
 *.suo
 *.zip

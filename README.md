@@ -348,6 +348,7 @@ To clean local package output:
 Remove-Item .\weather-api.zip -Force -ErrorAction SilentlyContinue
 Remove-Item .\artifact-manifest.json -Force -ErrorAction SilentlyContinue
 Remove-Item .\publish -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item .\artifact-download -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item .\package-run -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
@@ -356,7 +357,9 @@ To run the zip package locally, extract it and run the published ASP.NET Core as
 ```powershell
 Expand-Archive .\weather-api.zip -DestinationPath .\package-run -Force
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-dotnet .\package-run\WeatherApi.dll --urls "http://localhost:5010"
+Push-Location .\package-run
+dotnet .\WeatherApi.dll --urls "http://localhost:5010"
+Pop-Location
 ```
 
 If the package was downloaded from GitHub Actions, first extract the downloaded artifact wrapper, then extract the Lambda zip inside it:
@@ -365,7 +368,9 @@ If the package was downloaded from GitHub Actions, first extract the downloaded 
 Expand-Archive .\weather-api-lambda-package.zip -DestinationPath .\artifact-download -Force
 Expand-Archive .\artifact-download\weather-api.zip -DestinationPath .\package-run -Force
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-dotnet .\package-run\WeatherApi.dll --urls "http://localhost:5010"
+Push-Location .\package-run
+dotnet .\WeatherApi.dll --urls "http://localhost:5010"
+Pop-Location
 ```
 
 Then call:
@@ -380,7 +385,9 @@ To run the packaged app with the `test` profile instead, set `ASPNETCORE_ENVIRON
 ```powershell
 Expand-Archive .\weather-api.zip -DestinationPath .\package-run -Force
 $env:ASPNETCORE_ENVIRONMENT = "Test"
-dotnet .\package-run\WeatherApi.dll --urls "http://localhost:5011"
+Push-Location .\package-run
+dotnet .\WeatherApi.dll --urls "http://localhost:5011"
+Pop-Location
 ```
 
 Then call:
