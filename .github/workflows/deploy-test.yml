@@ -1,11 +1,6 @@
 name: 2 - deploy-test
 
 on:
-  workflow_run:
-    workflows:
-      - 1 - build, lint, test, package
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       source_run_id:
@@ -20,10 +15,6 @@ jobs:
   deploy-test:
     name: test deployment readiness
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main')
     environment: test
     permissions:
       actions: read
@@ -36,11 +27,7 @@ jobs:
       - name: Resolve source run id
         id: source
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "run_id=${{ inputs.source_run_id }}" >> "$GITHUB_OUTPUT"
 
       - name: Download Lambda package artifact from CI
         env:
@@ -48,7 +35,16 @@ jobs:
         run: gh run download "${{ steps.source.outputs.run_id }}" --name weather-api-lambda-package --dir .
 
       - name: Confirm deploy artifact
-        run: test -f weather-api.zip
+        run: |
+          test -f weather-api.zip
+          test -f artifact-manifest.json
+
+      - name: Show source artifact manifest
+        run: |
+          echo "### Lambda artifact promoted to test" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat artifact-manifest.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -71,5 +67,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weather-api-lambda-package-test-validated
-          path: weather-api.zip
+          path: |
+            weather-api.zip
+            artifact-manifest.json
           if-no-files-found: error
+          retention-days: 7

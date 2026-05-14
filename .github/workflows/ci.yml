@@ -67,12 +67,30 @@ jobs:
           cd publish
           zip -r ../weather-api.zip .
 
+      - name: Write artifact manifest
+        run: |
+          cat > artifact-manifest.json <<EOF
+          {
+            "artifact": "weather-api.zip",
+            "source_workflow": "${GITHUB_WORKFLOW}",
+            "source_run_id": "${GITHUB_RUN_ID}",
+            "source_run_number": "${GITHUB_RUN_NUMBER}",
+            "source_ref": "${GITHUB_REF_NAME}",
+            "source_sha": "${GITHUB_SHA}",
+            "created_at_utc": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          }
+          EOF
+          cat artifact-manifest.json
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: weather-api-lambda-package
-          path: weather-api.zip
+          path: |
+            weather-api.zip
+            artifact-manifest.json
           if-no-files-found: error
+          retention-days: 7
 
   iac-validate:
     name: terraform validate

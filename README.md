@@ -342,6 +342,58 @@ Compress-Archive -Path .\publish\* -DestinationPath .\weather-api.zip -Force
 
 The Terraform example expects the zip at `weather-api.zip` by default.
 
+To clean local package output:
+
+```powershell
+Remove-Item .\weather-api.zip -Force -ErrorAction SilentlyContinue
+Remove-Item .\artifact-manifest.json -Force -ErrorAction SilentlyContinue
+Remove-Item .\publish -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item .\package-run -Recurse -Force -ErrorAction SilentlyContinue
+```
+
+To run the zip package locally, extract it and run the published ASP.NET Core assembly:
+
+```powershell
+Expand-Archive .\weather-api.zip -DestinationPath .\package-run -Force
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+dotnet .\package-run\WeatherApi.dll --urls "http://localhost:5010"
+```
+
+If the package was downloaded from GitHub Actions, first extract the downloaded artifact wrapper, then extract the Lambda zip inside it:
+
+```powershell
+Expand-Archive .\weather-api-lambda-package.zip -DestinationPath .\artifact-download -Force
+Expand-Archive .\artifact-download\weather-api.zip -DestinationPath .\package-run -Force
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+dotnet .\package-run\WeatherApi.dll --urls "http://localhost:5010"
+```
+
+Then call:
+
+```powershell
+Invoke-RestMethod "http://localhost:5010/weather?city=Sydney"
+Invoke-RestMethod "http://localhost:5010/health"
+```
+
+To run the packaged app with the `test` profile instead, set `ASPNETCORE_ENVIRONMENT` to `Test`. This loads `appsettings.Test.json` and uses the live Open-Meteo provider:
+
+```powershell
+Expand-Archive .\weather-api.zip -DestinationPath .\package-run -Force
+$env:ASPNETCORE_ENVIRONMENT = "Test"
+dotnet .\package-run\WeatherApi.dll --urls "http://localhost:5011"
+```
+
+Then call:
+
+```powershell
+Invoke-RestMethod "http://localhost:5011/weather?city=Sydney"
+Invoke-RestMethod "http://localhost:5011/health"
+```
+
+The `test` profile needs internet access because it calls Open-Meteo.
+
+This checks the packaged application output. It is not a full API Gateway/Lambda emulator, but it proves the zipped ASP.NET Core app can start and serve requests locally without Docker.
+
 ## CI/CD
 
 The pipeline is split into three GitHub Actions workflows so the promotion path is explicit:
@@ -355,19 +407,31 @@ Runs on push to any branch, pull request, or manual trigger. It has two jobs:
 
 2. `2 - deploy-test` (`.github/workflows/deploy-test.yml`)
 
-Runs after `1 - build, lint, test, package` succeeds on `main`, or manually with a source run ID. It downloads the Lambda artifact produced by CI, validates Terraform deployment inputs for the `test` environment, and re-uploads a test-validated artifact for prod deployment.
+Runs manually with a source run ID from a successful `1 - build, lint, test, package` run. It downloads the Lambda artifact produced by CI, validates Terraform deployment inputs for the `test` environment, and re-uploads a test-validated artifact for prod deployment.
 
 3. `3 - deploy-prod` (`.github/workflows/deploy-prod.yml`)
 
-Runs after `2 - deploy-test` succeeds on `main`, or manually with a source run ID. It downloads the test-validated artifact and validates Terraform inputs for the `prod` environment.
+Runs manually with a source run ID from a successful `2 - deploy-test` run. It downloads the test-validated artifact and validates Terraform inputs for the `prod` environment.
 
 The order is:
 
 ```text
-1 - build, lint, test, package -> 2 - deploy-test -> 3 - deploy-prod
+push or pull request -> 1 - build, lint, test, package
+manual trigger -> 2 - deploy-test
+manual trigger -> 3 - deploy-prod
 ```
 
 The test and prod workflows use GitHub Environments named `test` and `prod`. They intentionally stop before real deployment because this technical test requires no AWS credentials. With AWS configured, these jobs would use OIDC to assume an AWS role and run `terraform plan/apply`.
+
+To download the Lambda zip from GitHub, open the successful `1 - build, lint, test, package` workflow run, scroll to **Artifacts**, and download `weather-api-lambda-package`. The downloaded artifact contains `weather-api.zip`.
+
+The artifact also contains `artifact-manifest.json`. This records the source workflow name, source run ID, run number, branch, commit SHA, and UTC creation time for the zip. The test and prod workflows print this manifest in the GitHub Actions summary, so it is clear which exact CI run and commit produced the package being promoted.
+
+Workflow artifacts are retained for 7 days using the `retention-days` setting on `actions/upload-artifact`. GitHub removes them automatically after that period. To clean an artifact sooner, open the workflow run in GitHub Actions and delete the artifact from the run page.
+
+To run `2 - deploy-test` manually, use the successful CI run ID from the Actions run URL. For example, in `https://github.com/<owner>/<repo>/actions/runs/123456789`, the source run ID is `123456789`.
+
+To run `3 - deploy-prod` manually, use the successful `2 - deploy-test` run ID, because that workflow re-uploads the `weather-api-lambda-package-test-validated` artifact.
 
 ## Verify CI and Terraform locally
 
